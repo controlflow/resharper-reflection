@@ -70,21 +70,23 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon
             .AppendFormat(
               "Inspection compilation produces {0} {1}:",
               errors.Count, NounUtil.ToPluralOrSingular("error", errors.Count))
-            .AppendLine().AppendLine();
+            .AppendLine();
 
           foreach (var error in errors)
           {
             var line = error.ErrorText;
 
             if (error.Line > 0 && error.Column > 0)
-              line += string.Format(" (line: {0}, column: {1})", error.Line, error.Offset);
+              line += string.Format(" [line {0} column {1}]", error.Line, error.Column);
 
             if (error.Offset >= 0)
             {
               var containingFile = declaration.GetContainingFile().NotNull();
-              var treeOffset = containingFile.Translate(declaration.GetDocumentRange().Document, error.Offset);
-              var node = declaration.FindNodeAt(new TreeTextRange(treeOffset, 1));
-              if (node != null && node.IsFiltered())
+              var treeOffset = containingFile.Translate(
+                declaration.GetDocumentRange().Document, error.Offset);
+
+              var node = containingFile.FindNodeAt(new TreeTextRange(treeOffset, 1));
+              if (node != null && !node.IsFiltered())
               {
                 consumer.AddHighlighting(
                   new InspectionDeclarationErrorHighlighting(
@@ -93,7 +95,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon
               }
             }
 
-            builder.Append(line);
+            builder.Append(line).AppendLine();
           }
 
           consumer.AddHighlighting(

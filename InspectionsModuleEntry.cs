@@ -93,13 +93,12 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
               var sourceRange = translator.GetSourceRange(offsetByCoords);
               if (sourceRange.IsValid)
               {
-                offset = sourceRange.StartOffset;
-
                 var document = classDeclaration.GetDocumentRange().Document;
                 var origCoords = document.GetCoordsByOffset(sourceRange.StartOffset);
 
                 line = 1 + (int) origCoords.Line;
-                column = 1 + (int) origCoords.Line;
+                column = 1 + (int) origCoords.Column;
+                offset = sourceRange.StartOffset;
               }
             }
           }

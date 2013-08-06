@@ -2,6 +2,7 @@
 using JetBrains.Annotations;
 using JetBrains.DocumentModel;
 using JetBrains.ReSharper.Psi;
+using JetBrains.ReSharper.Psi.CSharp.Parsing;
 using JetBrains.ReSharper.Psi.CSharp.Tree;
 using JetBrains.ReSharper.Psi.Resolve;
 using JetBrains.ReSharper.Psi.Tree;
@@ -91,9 +92,11 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
           }
           else
           {
-            if (reference is IAttribute)
+            var attribute = reference as IAttribute;
+            if (attribute != null)
             {
-              attrRange = reference.GetDocumentRange();
+              attrRange = GetAttributeRemoveRange(attribute);
+
               var sourceRange = attrRange.TextRange;
               var target1 = translator.GetResultRange(sourceRange);
               builder.Remove(target1.StartOffset, target1.Length);
@@ -133,12 +136,33 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
       return builder.ToString();
     }
 
+    private static DocumentRange GetAttributeRemoveRange(IAttribute attribute)
+    {
+      var attrRange = attribute.GetDocumentRange();
+
+      var section = AttributeSectionNavigator.GetByAttribute(attribute);
+      if (section != null)
+      {
+        if (section.Attributes.Count == 1)
+          return section.GetDocumentRange();
+
+        var token = attribute.GetNextMeaningfulToken();
+        if (token != null && token.GetTokenType() == CSharpTokenType.COMMA)
+        {
+          return attrRange.SetEndTo(token.GetDocumentRange().TextRange.EndOffset);
+        }
+      }
+
+      return attrRange;
+    }
+
     [NotNull]
-    private static string BuildLongName([NotNull] INamespace nameSpace)
+    private static string BuildLongName(
+      [NotNull] INamespace nameSpace, bool emitPrefix)
     {
       if (nameSpace.IsRootNamespace) return "global::";
 
-      return "global::" + nameSpace.QualifiedName + ".";
+      return "global::" + nameSpace.QualifiedName + (emitPrefix ? "." : null);
     }
 
     [CanBeNull]
@@ -147,8 +171,8 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
       bool emitTypeArguments = false)
     {
       var containing = typeElement.GetContainingNamespace();
-      var fullNs = BuildLongName(containing, containing.IdSubstitution);
-      var buf = new StringBuilder(fullNs).Append(typeElement.ShortName);
+      var longNamespaceName = BuildLongName(containing, true);
+      var buf = new StringBuilder(longNamespaceName).Append(typeElement.ShortName);
 
       var typeParameters = typeElement.TypeParameters;
       if (emitTypeArguments && typeParameters.Count > 0)
@@ -219,7 +243,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
       var nameSpace = element as INamespace;
       if (nameSpace != null)
       {
-        return BuildLongName(nameSpace);
+        return BuildLongName(nameSpace, false);
       }
 
       return null;

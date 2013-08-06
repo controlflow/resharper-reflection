@@ -51,7 +51,8 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation
             if (error.IsWarning) continue;
 
             errors.Add(new CompilationError(
-              error.Line, error.Column, error.ErrorNumber + ": " + error.ErrorText));
+              error.Line - 1, error.Column - 1,
+              error.ErrorNumber + ": " + error.ErrorText));
           }
 
           return errors;

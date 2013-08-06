@@ -13,10 +13,10 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation
     {
       if (errorText == null) throw new ArgumentNullException("errorText");
 
-      myLine = (line <= 0) ? 0 : line - 1;
-      myColumn = (column <= 0) ? 0 : column - 1;
+      myLine = (line <= 0) ? 0 : line;
+      myColumn = (column <= 0) ? 0 : column;
       myErrorText = errorText;
-      myOffset = -1;
+      myOffset = offset;
     }
 
     public int Line

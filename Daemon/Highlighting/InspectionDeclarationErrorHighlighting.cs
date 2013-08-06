@@ -6,7 +6,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon.Highlighti
   [StaticSeverityHighlighting(
     Severity.ERROR, "CSharpErrors",
     OverlapResolve = OverlapResolveKind.ERROR,
-    ShowToolTipInStatusBar = true)]
+    ShowToolTipInStatusBar = false)]
   public class InspectionDeclarationErrorHighlighting : IHighlighting
   {
     public InspectionDeclarationErrorHighlighting([NotNull] string toolTip)
