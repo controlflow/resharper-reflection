@@ -5,21 +5,18 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation
   [Serializable]
   public sealed class CompilationError
   {
-    private readonly int myLine;
-    private readonly int myColumn;
-    private readonly bool myIsWarning;
+    private readonly int myLine, myColumn, myOffset;
     private readonly string myErrorText;
 
     public CompilationError(
-      int line, int column, string errorNumber, string errorText, bool isWarning)
+      int line, int column, string errorText, int offset = -1)
     {
-      if (errorNumber == null) throw new ArgumentNullException("errorNumber");
       if (errorText == null) throw new ArgumentNullException("errorText");
 
       myLine = (line <= 0) ? 0 : line - 1;
       myColumn = (column <= 0) ? 0 : column - 1;
-      myErrorText = errorNumber + ": " + errorText;
-      myIsWarning = isWarning;
+      myErrorText = errorText;
+      myOffset = -1;
     }
 
     public int Line
@@ -32,14 +29,14 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation
       get { return myColumn; }
     }
 
+    public int Offset
+    {
+      get { return myOffset; }
+    }
+
     public string ErrorText
     {
       get { return myErrorText; }
-    }
-
-    public bool IsWarning
-    {
-      get { return myIsWarning; }
     }
   }
 }

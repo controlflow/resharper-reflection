@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using JetBrains.Annotations;
+using JetBrains.DocumentModel;
 using JetBrains.ReSharper.Psi;
 using JetBrains.ReSharper.Psi.CSharp.Tree;
 using JetBrains.ReSharper.Psi.Resolve;
@@ -13,9 +14,9 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
     [NotNull] public static string RewriteDeclaration(
       [NotNull] IClassDeclaration declaration, [NotNull] out RangeTranslator translator)
     {
-      
-
       var declarationRange = declaration.GetDocumentRange();
+
+
 
       translator = new RangeTranslator();
       translator.StartMapping(declarationRange.TextRange);
@@ -35,7 +36,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
       // declaration text
       builder.Append(declaration.GetText());
 
-      var processor = new RecursiveElementCollector<ITypeArgumentsOwnerElement>(node =>
+      var processor = new RecursiveElementCollector<ITreeNode>(node =>
       {
         var referenceName = node as IReferenceName;
         if (referenceName != null && referenceName.Qualifier == null) return true;
@@ -43,11 +44,29 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
         var expression = node as IReferenceExpression;
         if (expression != null && expression.QualifierExpression == null) return true;
 
+        var attribute = node as IAttribute;
+        if (attribute != null)
+        {
+          var typeReference = attribute.TypeReference;
+          if (typeReference != null)
+          {
+            var typeElem = typeReference.Resolve().DeclaredElement as ITypeElement;
+            if (typeElem != null)
+            {
+              if (typeElem.GetClrName().ShortName == "ReflectionInspectionAttribute")
+              {
+                return true;
+              }
+            }
+          }
+        }
+
         return false;
       });
 
       declaration.ProcessDescendants(processor);
 
+      var attrRange = DocumentRange.InvalidRange;
       foreach (var reference in processor.GetResults())
       {
         IResolveResult result;
@@ -64,11 +83,26 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
         else
         {
           var referenceExpression = reference as IReferenceExpression;
-          if (referenceExpression == null) continue;
+          if (referenceExpression != null)
+          {
+            result = referenceExpression.Reference.Resolve().Result;
+            nameIdentifier = referenceExpression.NameIdentifier;
+            hasTypeArguments = (referenceExpression.TypeArgumentList != null);
+          }
+          else
+          {
+            if (reference is IAttribute)
+            {
+              attrRange = reference.GetDocumentRange();
+              var sourceRange = attrRange.TextRange;
+              var target1 = translator.GetResultRange(sourceRange);
+              builder.Remove(target1.StartOffset, target1.Length);
+              translator.MapTextToText(
+                sourceRange.StartOffset, sourceRange.Length, target1.StartOffset, 0);
+            }
 
-          result = referenceExpression.Reference.Resolve().Result;
-          nameIdentifier = referenceExpression.NameIdentifier;
-          hasTypeArguments = (referenceExpression.TypeArgumentList != null);
+            continue;
+          }
         }
 
         if (result.DeclaredElement == null) continue;
@@ -77,6 +111,8 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
         if (fqn == null) continue;
 
         var range = nameIdentifier.GetDocumentRange().TextRange;
+        if (attrRange.TextRange.Contains(range)) continue;
+
         var target = translator.GetResultRange(range);
 
         builder.Remove(target.StartOffset, target.Length);

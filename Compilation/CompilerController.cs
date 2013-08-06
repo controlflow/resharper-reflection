@@ -3,88 +3,107 @@ using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using JetBrains.ReSharper.ControlFlow.ReflectionInspection.Domain;
 
 // TODO: DO NOT USE ANY OF TYPES FROM JETBRAINS.* NAMESPACES
 
 namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation
 {
-  internal sealed class CompilerController : MarshalByRefObject
+  public sealed class CompilerController : MarshalByRefObject
   {
+    private readonly object mySyncLock;
     private readonly List<Assembly> myAssemblies;
     private readonly Dictionary<string, Type> myTypeToAssembly;
 
     public CompilerController()
     {
+      mySyncLock = new object();
       myAssemblies = new List<Assembly>();
       myTypeToAssembly = new Dictionary<string, Type>();
       CompilerLanguage = "CSharp";
     }
 
     public string CompilerLanguage { get; set; }
+    public DomainRoot DomainRoot { get; set; }
 
-    public bool TooManyAssemblies
+    public List<CompilationError> Compile(params string[] sources)
     {
-      get { return myAssemblies.Count > 42; }
-    }
-
-    private List<CompilationError> CompileUnits(params string[] sources)
-    {
-      var provider = CodeDomProvider.CreateProvider(CompilerLanguage);
-
-      var systemDllLocation = typeof(Uri).Assembly.Location;
-      var systemCoreDllLocation = typeof(Enumerable).Assembly.Location;
-
-      var parameters = new CompilerParameters {
-        GenerateInMemory = true,
-        ReferencedAssemblies = {
-          systemDllLocation,
-          systemCoreDllLocation,
-        },
-      };
-
       var errors = new List<CompilationError>();
-
-      var results = provider.CompileAssemblyFromSource(parameters, sources);
-      if (results.Errors.HasErrors)
-      {
-        foreach (CompilerError error in results.Errors)
-        {
-          errors.Add(new CompilationError(
-            error.Line, error.Column,
-            error.ErrorNumber, error.ErrorText,
-            error.IsWarning));
-        }
-
-        return errors;
-      }
 
       try
       {
+        var provider = CodeDomProvider.CreateProvider(CompilerLanguage);
+
+        var systemDllLocation = typeof(Uri).Assembly.Location;
+        var systemCoreDllLocation = typeof(Enumerable).Assembly.Location;
+
+        var parameters = new CompilerParameters
+        {
+          ReferencedAssemblies = {systemDllLocation, systemCoreDllLocation},
+          GenerateInMemory = true
+        };
+
+        var results = provider.CompileAssemblyFromSource(parameters, sources);
+        if (results.Errors.HasErrors)
+        {
+          foreach (CompilerError error in results.Errors)
+          {
+            if (error.IsWarning) continue;
+
+            errors.Add(new CompilationError(
+              error.Line, error.Column, error.ErrorNumber + ": " + error.ErrorText));
+          }
+
+          return errors;
+        }
+
         var assembly = results.CompiledAssembly;
         if (assembly != null)
         {
-          myAssemblies.Add(assembly);
+          lock (mySyncLock)
+          {
+            myAssemblies.Add(assembly);
 
-          foreach (var type in assembly.GetTypes())
-            myTypeToAssembly[type.FullName] = type;
+            var root = DomainRoot;
+            if (root != null) root.AddAssembly();
+
+            var maybeDead = new HashSet<Assembly>();
+            foreach (var type in assembly.GetTypes())
+            {
+              Type value;
+              if (myTypeToAssembly.TryGetValue(type.FullName, out value))
+                maybeDead.Add(value.Assembly);
+
+              myTypeToAssembly[type.FullName] = type;
+            }
+
+            if (maybeDead.Count > 0)
+            {
+              foreach (var type in myTypeToAssembly.Values)
+                maybeDead.Remove(type.Assembly);
+
+              if (root != null) root.AddDeadAssembly(maybeDead.Count);
+            }
+          }
         }
       }
-      catch { }
+      catch (Exception exception)
+      {
+        errors.Add(new CompilationError(
+          0, 0, "Exception: " + exception));
+      }
 
       return errors;
     }
 
-    public IList<CompilationError> Compile(params string[] sources)
-    {
-      var results = CompileUnits(sources);
-      return results;
-    }
-
-    public static CompilerController CreateInDomain(AppDomain domain)
+    public static CompilerController CreateInDomain(InspectionDomain inspectionDomain)
     {
       var type = typeof (CompilerController);
-      return (CompilerController)
-        domain.CreateInstanceAndUnwrap(type.Assembly.FullName, type.FullName);
+      var controller = (CompilerController)
+        inspectionDomain.Domain.CreateInstanceAndUnwrap(type.Assembly.FullName, type.FullName);
+      controller.DomainRoot = inspectionDomain.Root;
+
+      return controller;
     }
   }
 }

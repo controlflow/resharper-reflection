@@ -3,8 +3,11 @@ using JetBrains.Annotations;
 using JetBrains.Application;
 using JetBrains.DataFlow;
 using JetBrains.ProjectModel;
+using JetBrains.ReSharper.ControlFlow.ReflectionInspection.Domain;
+using JetBrains.ReSharper.Psi;
 using JetBrains.ReSharper.Psi.Caches;
 using JetBrains.ReSharper.Psi.Modules;
+using JetBrains.Util;
 
 namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
 {
@@ -13,7 +16,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
   {
     [NotNull] private readonly IPsiModules myPsiModules;
     [NotNull] private readonly DomainSupervisor myDomainSupervisor;
-    [NotNull] private readonly Dictionary<IPsiModule, InspectionsCacheEntry> myCaches;
+    [NotNull] private readonly Dictionary<IPsiModule, InspectionsModuleEntry> myCaches;
     [NotNull] private readonly object mySyncLock;
 
     public InspectionsCache(
@@ -24,7 +27,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
     {
       myPsiModules = psiModules;
       myDomainSupervisor = domainSupervisor;
-      myCaches = new Dictionary<IPsiModule, InspectionsCacheEntry>();
+      myCaches = new Dictionary<IPsiModule, InspectionsModuleEntry>();
       mySyncLock = new object();
 
       changeManager.Changed2.Advise(lifetime, OnChangeManagerChanged);
@@ -37,14 +40,14 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
     }
 
     [NotNull]
-    public InspectionsCacheEntry GetEntry([NotNull] IPsiModule module)
+    public InspectionsModuleEntry GetEntry([NotNull] IPsiModule module)
     {
       lock (mySyncLock)
       {
-        InspectionsCacheEntry entry;
+        InspectionsModuleEntry entry;
         if (myCaches.TryGetValue(module, out entry)) return entry;
 
-        return myCaches[module] = new InspectionsCacheEntry(this, module);
+        return myCaches[module] = new InspectionsModuleEntry(this, module);
       }
     }
 
@@ -64,7 +67,19 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
 
       if (moduleChange.FileChanges.Count > 0)
       {
-        // todo: a
+        var filesPerCache = new OneToListMap<InspectionsModuleEntry, IPsiSourceFile>();
+        lock (mySyncLock)
+        {
+          foreach (var change in moduleChange.FileChanges)
+          {
+            InspectionsModuleEntry entry;
+            if (myCaches.TryGetValue(change.Item.PsiModule, out entry))
+              filesPerCache.Add(entry, change.Item);
+          }
+        }
+
+        foreach (var cacheFilesPair in filesPerCache)
+          cacheFilesPair.Key.Drop(cacheFilesPair.Value);
       }
     }
   }

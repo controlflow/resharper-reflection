@@ -2,6 +2,7 @@
 using JetBrains.Annotations;
 using JetBrains.Application.Progress;
 using JetBrains.ProjectModel;
+using JetBrains.ReSharper.ControlFlow.ReflectionInspection.Domain;
 using JetBrains.ReSharper.Daemon;
 using JetBrains.ReSharper.Feature.Services.Bulbs;
 using JetBrains.ReSharper.Feature.Services.CSharp.Bulbs;
@@ -50,48 +51,13 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
       var classType = declaration.DeclaredElement as IClass;
       if (classType == null || !classType.IsAttribute()) return null;
 
-      var supervisor = solution.GetComponent<DomainSupervisor>();
       var inspectionsCache = solution.GetComponent<InspectionsCache>();
 
       var entry = inspectionsCache.GetEntry(classType.Module);
 
       return entry.Bar(declaration);
-      
-      {
-        //var error = new HeapAllocationHighlighting(list[0].ErrorText);
-        //var nameDocumentRange = declaration.GetNameDocumentRange();
-
-        
-
-        //var errorText = list[0].ErrorText;
-        //
-        //
-        //MessageBox.ShowError(errorText);
-      }
-
-
-      return null;
     }
   }
 
-  [StaticSeverityHighlighting(Severity.ERROR,
-    "CSharpErrors",
-    OverlapResolve = OverlapResolveKind.ERROR,
-    ShowToolTipInStatusBar = true)]
-  public class HeapAllocationHighlighting : IHighlighting
-  {
-    public HeapAllocationHighlighting(string toolTip)
-    {
-      ToolTip = toolTip;
-    }
-
-    public bool IsValid()
-    {
-      return true;
-    }
-
-    public string ToolTip { get; private set; }
-    public string ErrorStripeToolTip { get { return ToolTip; } }
-    public int NavigationOffsetPatch { get { return 0; } }
-  }
+  
 }
