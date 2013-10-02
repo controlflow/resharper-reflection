@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Linq;
 using System.Text;
 using JetBrains.Annotations;
 using JetBrains.Application.Settings;
 using JetBrains.ProjectModel;
+using JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformation;
 using JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon.Highlighting;
 using JetBrains.ReSharper.Daemon;
 using JetBrains.ReSharper.Daemon.CSharp.Stages;
@@ -82,6 +84,8 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon
           return;
         }
 
+        // todo: check any public ValidateMethods with suitable signature
+
         var inspectionsCache = File.GetSolution().GetComponent<InspectionsCache>();
         var entry = inspectionsCache.GetEntry(classType.Module);
 
@@ -96,6 +100,9 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon
             "Inspection compilation produces {0} {1}:",
             errors.Count, NounUtil.ToPluralOrSingular("error", errors.Count))
           .AppendLine();
+
+        RangeTranslator translator;
+        builder.AppendLine(CodeQualifier.RewriteDeclaration(declaration, out translator));
 
         foreach (var error in errors)
         {
@@ -121,6 +128,13 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon
           }
 
           builder.Append(line).AppendLine();
+        }
+
+        if (errors.Any(x => x.ErrorText.StartsWith("CS0234")))
+        {
+          builder.AppendLine().AppendLine(
+            "Please, make shure you are using only BCL types in inspection body or " +
+            "every project type refereces occurs only in typeof(T) expressions");
         }
 
         consumer.AddHighlighting(
