@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using JetBrains.Annotations;
 using JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation;
+using JetBrains.ReSharper.Psi;
 using JetBrains.Util;
 
 namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
@@ -18,5 +19,6 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
     }
 
     [NotNull] public IList<CompilationError> Errors { get; private set; }
+    
   }
 }

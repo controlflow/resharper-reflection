@@ -45,7 +45,10 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
       InspectionInfo info;
       lock (mySyncLock)
       {
-        if (myDict.TryGetValue(foo, out info)) return info;
+        if (myDict.TryGetValue(foo, out info))
+        {
+          return info;
+        }
       }
 
       if (!(foo is IClass)) return null;
@@ -66,6 +69,8 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
       if (results.Count == 0)
       {
         info = new InspectionInfo();
+
+        // todo: store in dict
       }
       else
       {
@@ -112,7 +117,6 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
 
         info = new InspectionInfo(xs.ResultingList());
       }
-
 
       return info;
     }
@@ -175,7 +179,8 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
 
               var document = declaration.GetDocumentRange().Document;
               var origCoords = document.GetCoordsByOffset(sourceRange.StartOffset);
-              sb.AppendFormat(" (line: {0}, column: {1})", origCoords.Line.Plus1(), origCoords.Column.Plus1());
+              sb.AppendFormat(" (line: {0}, column: {1})",
+                origCoords.Line.Plus1(), origCoords.Column.Plus1());
             }
           }
         }

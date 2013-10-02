@@ -59,6 +59,7 @@
     <Compile Include="InspectionsCache.cs" />
     <Compile Include="InspectionsModuleEntry.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TypeSystem\ReSharperType.cs" />
   </ItemGroup>
   <ItemGroup />
   <PropertyGroup>
