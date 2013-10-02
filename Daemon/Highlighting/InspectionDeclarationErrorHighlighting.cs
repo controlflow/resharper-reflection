@@ -14,11 +14,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon.Highlighti
       ToolTip = toolTip;
     }
 
-    public bool IsValid()
-    {
-      return true;
-    }
-
+    public bool IsValid() { return true; }
     public string ToolTip { get; private set; }
     public string ErrorStripeToolTip { get { return ToolTip; } }
     public int NavigationOffsetPatch { get { return 0; } }
