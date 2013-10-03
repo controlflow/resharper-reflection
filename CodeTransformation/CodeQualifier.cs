@@ -5,15 +5,12 @@ using JetBrains.DocumentModel;
 using JetBrains.ReSharper.Psi;
 using JetBrains.ReSharper.Psi.CSharp.Parsing;
 using JetBrains.ReSharper.Psi.CSharp.Tree;
-using JetBrains.ReSharper.Psi.Impl;
 using JetBrains.ReSharper.Psi.Resolve;
 using JetBrains.ReSharper.Psi.Tree;
 using JetBrains.Util;
-using JetBrains.Util.Special;
 
 namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformation
 {
-  // TODO: extension methods
   // TODO: typeof(T) expression
 
   public static class CodeQualifier
@@ -28,155 +25,136 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
 
       var builder = new StringBuilder();
 
-      InsertUsingsForUsedExtensionMethods(builder, declaration, translator);
+      InsertUsingsForUsedExtensionMethods(
+        builder, declaration, translator, declarationRange);
 
-      // prolog
       var typeElement = declaration.DeclaredElement.NotNull();
       var nameSpace = typeElement.GetContainingNamespace();
       if (!nameSpace.IsRootNamespace)
-      {
-        builder.Append("namespace ").Append(nameSpace.QualifiedName).Append('{').AppendLine();
-        translator.MapTextToText(
-          declarationRange.TextRange.StartOffset, 0, 0, builder.Length);
-      }
+        InsertNamespaceDeclaration(builder, nameSpace, translator, declarationRange);
 
-      // declaration text
+      // copy whole declaration text
       builder.Append(declaration.GetText());
 
-      var processor = new RecursiveElementCollector<ITreeNode>(node =>
+      var elementsToRemoveProcessor = new RecursiveElementCollector<ITreeNode>(IsElementToRemove);
+      var removedRanges = new List<TextRange>(1);
+
+      foreach (var node in elementsToRemoveProcessor.GetResults())
       {
-        var referenceName = node as IReferenceName;
-        if (referenceName != null && referenceName.Qualifier == null) return true;
-
-        var expression = node as IReferenceExpression;
-        if (expression != null && expression.QualifierExpression == null) return true;
-
-        var attribute = node as IAttribute; // generalize
+        var attribute = node as IAttribute;
         if (attribute != null)
         {
-          var typeReference = attribute.TypeReference;
-          if (typeReference != null)
-          {
-            var typeElem = typeReference.Resolve().DeclaredElement as ITypeElement;
-            if (typeElem != null && typeElem.GetClrName().ShortName == "ReflectionInspectionAttribute")
-            {
-              return true;
-            }
-          }
+          var sourceRange = GetAttributeRemoveRange(attribute);
+          var resultRange = translator.GetResultRange(sourceRange);
+
+          builder.Remove(resultRange.StartOffset, resultRange.Length);
+          translator.MapTextToText(
+            sourceRange.StartOffset, sourceRange.Length, resultRange.StartOffset, 0);
+
+          removedRanges.Add(sourceRange);
         }
+      }
 
-        return false;
-      });
+      var elementsToQualifyProcessor = new RecursiveElementCollector<ITreeNode>(IsElementToQualify);
+      declaration.ProcessDescendants(elementsToQualifyProcessor);
 
-      declaration.ProcessDescendants(processor);
-
-      var attrRange = DocumentRange.InvalidRange;
-      foreach (var reference in processor.GetResults())
+      foreach (var reference in elementsToQualifyProcessor.GetResults())
       {
-        IResolveResult result;
-        ITreeNode nameIdentifier;
-        bool hasTypeArguments;
-
-        var referenceName = reference as IReferenceName;
-        if (referenceName != null)
-        {
-          result = referenceName.Reference.Resolve().Result;
-          nameIdentifier = referenceName.NameIdentifier;
-          hasTypeArguments = (referenceName.TypeArgumentList != null);
-        }
-        else
-        {
-          var referenceExpression = reference as IReferenceExpression;
-          if (referenceExpression != null)
-          {
-            result = referenceExpression.Reference.Resolve().Result;
-            nameIdentifier = referenceExpression.NameIdentifier;
-            hasTypeArguments = (referenceExpression.TypeArgumentList != null);
-          }
-          else
-          {
-            var attribute = reference as IAttribute;
-            if (attribute != null)
-            {
-              attrRange = GetAttributeRemoveRange(attribute);
-
-              var sourceRange = attrRange.TextRange;
-              var target1 = translator.GetResultRange(sourceRange);
-              builder.Remove(target1.StartOffset, target1.Length);
-              translator.MapTextToText(
-                sourceRange.StartOffset, sourceRange.Length, target1.StartOffset, 0);
-            }
-
-            continue;
-          }
-        }
-
-        if (result.DeclaredElement == null) continue;
-
-        var fqn = BuildLongName(result.DeclaredElement, result.Substitution, !hasTypeArguments);
-        if (fqn == null)
-        {
-          var method = result.DeclaredElement as IMethod;
-          if (method != null && method.IsExtensionMethod)
-          {
-            var re = reference as IReferenceExpression;
-            if (re != null && re.IsExtensionMethod())
-            {
-              //var containingType = method.GetContainingType().NotNull();
-              //var longName = BuildLongName(containingType, containingType.IdSubstitution, hasTypeArguments);
-              //var firstArgRange = re.QualifierExpression.GetDocumentRange();
-              //var faText = firstArgRange.GetText();
-              //
-              ////var toRemove = re.Delimiter.GetDocumentRange()
-              ////  .SetEndTo(re.NameIdentifier.GetDocumentRange().TextRange.EndOffset);
-              //
-              //var sourceRange = firstArgRange.TextRange;
-              //var rrrr = translator.GetResultRange(sourceRange);
-              //
-              //builder.Remove(rrrr.StartOffset, rrrr.Length);
-              //builder.Insert(rrrr.StartOffset, longName);
-              //
-              //translator.MapTextToText(
-              //  sourceRange.StartOffset, sourceRange.Length, rrrr.StartOffset, rrrr.Length);
-              //
-              //var invoked = InvocationExpressionNavigator.GetByInvokedExpression(re);
-              //if (invoked != null)
-              //{
-              //  var aa = invoked.LPar.GetDocumentRange().TextRange.EndOffset;
-              //}
-            }
-          }
-
-
-          continue;
-        }
-
-        var range = nameIdentifier.GetDocumentRange().TextRange;
-        if (attrRange.TextRange.Contains(range)) continue; // todo: generalize, use for typeof() rewrite
-
-        var target = translator.GetResultRange(range);
-
-        builder.Remove(target.StartOffset, target.Length);
-        builder.Insert(target.StartOffset, fqn);
-
-        translator.MapTextToText(
-          range.StartOffset, range.Length, target.StartOffset, fqn.Length);
+        QualifyReference(builder, reference, translator, removedRanges);
       }
 
       translator.EndMapping(TextRange.FromLength(builder.Length));
 
-      // epilog
-      if (!nameSpace.IsRootNamespace)
-      {
-        builder.AppendLine().Append("}");
-      }
+      if (!nameSpace.IsRootNamespace) builder.AppendLine().Append("}");
 
       return builder.ToString();
     }
 
+    private static void QualifyReference(
+      [NotNull] StringBuilder builder, [NotNull] ITreeNode reference,
+      [NotNull] RangeTranslator translator, [NotNull] List<TextRange> removedRanges)
+    {
+      IResolveResult result;
+      ITreeNode nameIdentifier;
+      bool hasTypeArguments;
+
+      var referenceName = reference as IReferenceName;
+      if (referenceName != null)
+      {
+        result = referenceName.Reference.Resolve().Result;
+        nameIdentifier = referenceName.NameIdentifier;
+        hasTypeArguments = (referenceName.TypeArgumentList != null);
+      }
+      else
+      {
+        var referenceExpression = reference as IReferenceExpression;
+        if (referenceExpression != null)
+        {
+          result = referenceExpression.Reference.Resolve().Result;
+          nameIdentifier = referenceExpression.NameIdentifier;
+          hasTypeArguments = (referenceExpression.TypeArgumentList != null);
+        }
+        else return;
+      }
+
+      if (result.DeclaredElement == null) return;
+
+      var fullyQualifiedName = FqnUtil.Build(
+        result.DeclaredElement, result.Substitution, !hasTypeArguments);
+      if (fullyQualifiedName == null) return;
+
+      var sourceRange = nameIdentifier.GetDocumentRange().TextRange;
+
+      foreach (var removedRange in removedRanges)
+        if (removedRange.Contains(sourceRange)) return;
+
+      var resultRange = translator.GetResultRange(sourceRange);
+
+      builder.Remove(resultRange.StartOffset, resultRange.Length);
+      builder.Insert(resultRange.StartOffset, fullyQualifiedName);
+
+      translator.MapTextToText(
+        sourceRange.StartOffset, sourceRange.Length,
+        resultRange.StartOffset, fullyQualifiedName.Length);
+    }
+
+    private static bool IsElementToRemove([NotNull] ITreeNode node)
+    {
+      var attribute = node as IAttribute;
+      if (attribute != null)
+      {
+        var typeReference = attribute.TypeReference;
+        if (typeReference != null)
+        {
+          var typeElement = typeReference.Resolve().DeclaredElement as ITypeElement;
+          if (typeElement != null)
+          {
+            var attributeType = typeElement.GetClrName();
+            if (attributeType.IsReflectionInspectionAttribute())
+              return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    private static bool IsElementToQualify([NotNull] ITreeNode node)
+    {
+      var referenceName = node as IReferenceName;
+      if (referenceName != null && referenceName.Qualifier == null)
+        return true;
+
+      var expression = node as IReferenceExpression;
+      if (expression != null && expression.QualifierExpression == null)
+        return true;
+
+      return false;
+    }
+
     private static void InsertUsingsForUsedExtensionMethods(
       [NotNull] StringBuilder builder, [NotNull] ITreeNode declaration,
-      [NotNull] RangeTranslator translator)
+      [NotNull] RangeTranslator translator, DocumentRange declarationRange)
     {
       var processor = new RecursiveElementCollector<IReferenceExpression>(
         reference => reference.QualifierExpression != null && reference.IsExtensionMethod());
@@ -198,7 +176,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
 
       if (namespaces.Count == 0) return;
 
-      var startOffset = declaration.GetDocumentRange().TextRange.StartOffset;
+      var startOffset = declarationRange.TextRange.EndOffset;
       foreach (var nameSpace in namespaces)
       {
         builder.Append("using ").Append(nameSpace.QualifiedName).AppendLine(";");
@@ -206,16 +184,29 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
       }
     }
 
-    private static DocumentRange GetAttributeRemoveRange(IAttribute attribute)
+    private static void InsertNamespaceDeclaration(
+      [NotNull] StringBuilder builder, [NotNull] INamespace nameSpace,
+      [NotNull] RangeTranslator translator, DocumentRange declarationRange)
     {
-      var attrRange = attribute.GetDocumentRange();
+      builder.Append("namespace ")
+        .Append(nameSpace.QualifiedName).Append('{').AppendLine();
+
+      translator.MapTextToText(
+        declarationRange.TextRange.StartOffset, 0, 0, builder.Length);
+    }
+
+    private static TextRange GetAttributeRemoveRange([NotNull] IAttribute attribute)
+    {
+      var attrRange = attribute.GetDocumentRange().TextRange;
 
       var section = AttributeSectionNavigator.GetByAttribute(attribute);
       if (section != null)
       {
+        // <[RangeToRemove]> class C { }
         if (section.Attributes.Count == 1)
-          return section.GetDocumentRange();
+          return section.GetDocumentRange().TextRange;
 
+        // [<RangeToRemove,> SomeOtherAttr] class C { }
         var token = attribute.GetNextMeaningfulToken();
         if (token != null && token.GetTokenType() == CSharpTokenType.COMMA)
         {
@@ -224,99 +215,6 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
       }
 
       return attrRange;
-    }
-
-    [NotNull]
-    private static string BuildLongName(
-      [NotNull] INamespace nameSpace, bool emitPrefix)
-    {
-      if (nameSpace.IsRootNamespace) return "global::";
-
-      return "global::" + nameSpace.QualifiedName + (emitPrefix ? "." : null);
-    }
-
-    [CanBeNull]
-    private static string BuildLongName(
-      [NotNull] ITypeElement typeElement, [NotNull] ISubstitution substitution,
-      bool emitTypeArguments = false)
-    {
-      var containing = typeElement.GetContainingNamespace();
-      var longNamespaceName = BuildLongName(containing, true);
-      var buf = new StringBuilder(longNamespaceName).Append(typeElement.ShortName);
-
-      var typeParameters = typeElement.TypeParameters;
-      if (emitTypeArguments && typeParameters.Count > 0)
-      {
-        buf.Append('<');
-
-        var first = true;
-        foreach (var typeParameter in typeParameters)
-        {
-          if (first) first = false;
-          else buf.Append(',');
-
-          var typeFqn = BuildLongName(substitution[typeParameter], true);
-          if (typeFqn == null) return null;
-
-          buf.Append(typeFqn);
-        }
-
-        buf.Append('>');
-      }
-
-      return buf.ToString();
-    }
-
-    [CanBeNull]
-    private static string BuildLongName([CanBeNull] IType type, bool emitTypeArguments)
-    {
-      var arrayType = type as IArrayType;
-      if (arrayType != null)
-      {
-        var elementFqn = BuildLongName(arrayType.ElementType, emitTypeArguments);
-        if (elementFqn == null) return null;
-
-        return elementFqn + "[" + new string(',', arrayType.Rank - 1) + "]";
-      }
-
-      var declaredType = type as IDeclaredType;
-      if (declaredType != null)
-      {
-        var typeElement = declaredType.GetTypeElement();
-        if (typeElement == null) return null;
-
-        return BuildLongName(typeElement, declaredType.GetSubstitution(), emitTypeArguments);
-      }
-
-      var pointerType = type as IPointerType;
-      if (pointerType != null)
-      {
-        var elementFqn = BuildLongName(pointerType.ElementType, emitTypeArguments);
-        if (elementFqn == null) return null;
-
-        return elementFqn + "*";
-      }
-
-      return null;
-    }
-
-    [CanBeNull] private static string BuildLongName(
-      [NotNull] IDeclaredElement element, [NotNull] ISubstitution substitution,
-      bool emitTypeArguments = false)
-    {
-      var typeElement = element as ITypeElement;
-      if (typeElement != null)
-      {
-        return BuildLongName(typeElement, substitution, emitTypeArguments);
-      }
-
-      var nameSpace = element as INamespace;
-      if (nameSpace != null)
-      {
-        return BuildLongName(nameSpace, false);
-      }
-
-      return null;
     }
   }
 }

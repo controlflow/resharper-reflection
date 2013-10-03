@@ -98,12 +98,12 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon
         var errors = inspectionInfo.Errors;
         if (errors.Count == 0) return;
 
-        var builder = new StringBuilder();
-        builder.AppendFormat(
-            "Inspection compilation produces {0} {1}:",
+        var builder = new StringBuilder()
+          .AppendFormat("Inspection compilation produces {0} {1}:",
             errors.Count, NounUtil.ToPluralOrSingular("error", errors.Count))
           .AppendLine();
 
+        // todo: remove
         RangeTranslator translator;
         builder.AppendLine(CodeQualifier.RewriteDeclaration(declaration, out translator));
 

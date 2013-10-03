@@ -47,10 +47,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CodeTransformation\CodeQualifier.cs" />
+    <Compile Include="CodeTransformation\FqnUtil.cs" />
     <Compile Include="Compilation\CompilationError.cs" />
     <Compile Include="Compilation\CompilerController.cs" />
     <Compile Include="Daemon\Highlighting\InspectionDeclarationErrorHighlighting.cs" />
-    <Compile Include="Daemon\InspectionDeclarationProblemAnalyzer.cs" />
+    <Compile Include="Daemon\InspectionDeclarationIssuesDaemonStage.cs" />
     <Compile Include="Domain\DomainRoot.cs" />
     <Compile Include="Domain\DomainSupervisor.cs" />
     <Compile Include="Domain\InspectionDomain.cs" />
@@ -60,6 +61,7 @@
     <Compile Include="InspectionsModuleEntry.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TypeSystem\ReSharperType.cs" />
+    <Compile Include="Utils\CommonUtils.cs" />
   </ItemGroup>
   <ItemGroup />
   <PropertyGroup>
