@@ -64,6 +64,8 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection
       var text = CodeQualifier.RewriteDeclaration(classDeclaration, out translator);
 
       var controller = GetOrCreateCompilerController();
+
+      // todo: catch RemotingException here (and everywhere)
       var results = controller.Compile(text);
 
       if (results.Count == 0)
