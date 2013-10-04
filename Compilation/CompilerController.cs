@@ -3,12 +3,25 @@ using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using JetBrains.Annotations;
 using JetBrains.ReSharper.ControlFlow.ReflectionInspection.Domain;
 
 // TODO: DO NOT USE ANY OF TYPES FROM JETBRAINS.* NAMESPACES
 
+
+
 namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation
 {
+  public static class ReflectionInspectionTypeResolver
+  {
+    [UsedImplicitly]
+    public static Type ResolveTypeName(string fullQualifiedName)
+    {
+      GC.KeepAlive(fullQualifiedName);
+      return null;
+    }
+  }
+
   public sealed class CompilerController : MarshalByRefObject
   {
     private readonly object mySyncLock;
@@ -36,10 +49,17 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation
 
         var systemDllLocation = typeof(Uri).Assembly.Location;
         var systemCoreDllLocation = typeof(Enumerable).Assembly.Location;
+        var me = typeof (CompilerController).Assembly.Location;
 
         var parameters = new CompilerParameters
         {
-          ReferencedAssemblies = {systemDllLocation, systemCoreDllLocation},
+          ReferencedAssemblies =
+          {
+            systemDllLocation,
+            systemCoreDllLocation,
+            me,
+          },
+
           GenerateInMemory = true
         };
 

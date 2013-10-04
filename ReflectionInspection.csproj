@@ -50,6 +50,7 @@
     <Compile Include="CodeTransformation\FqnUtil.cs" />
     <Compile Include="Compilation\CompilationError.cs" />
     <Compile Include="Compilation\CompilerController.cs" />
+    <Compile Include="Daemon\Class1.cs" />
     <Compile Include="Daemon\Highlighting\InspectionDeclarationErrorHighlighting.cs" />
     <Compile Include="Daemon\InspectionDeclarationIssuesDaemonStage.cs" />
     <Compile Include="Domain\DomainRoot.cs" />

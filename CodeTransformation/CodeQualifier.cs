@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Text;
 using JetBrains.Annotations;
+using JetBrains.ReSharper.ControlFlow.ReflectionInspection.Compilation;
 using JetBrains.ReSharper.Psi;
 using JetBrains.ReSharper.Psi.CSharp.Parsing;
 using JetBrains.ReSharper.Psi.CSharp.Tree;
@@ -80,7 +81,8 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.CodeTransformatio
           var sourceRange = typeofExpression.GetDocumentRange().TextRange;
           var resultRange = translator.GetResultRange(sourceRange);
 
-          var foo = "___FOO.BAR(\"" + fqn + "\")";
+          var name = typeof(ReflectionInspectionTypeResolver).FullName;
+          var foo = name + ".ResolveTypeName(\"" + fqn + "\")";
 
           builder.Remove(resultRange.StartOffset, resultRange.Length);
           builder.Insert(resultRange.StartOffset, foo);

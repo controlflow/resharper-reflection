@@ -146,7 +146,7 @@ namespace JetBrains.ReSharper.ControlFlow.ReflectionInspection.Daemon
       }
     }
 
-    private static bool IsReflectionInspectionAttribute([NotNull] ITypeElement typeElement)
+    public static bool IsReflectionInspectionAttribute([NotNull] ITypeElement typeElement)
     {
       foreach (var attribute in typeElement.GetAttributeInstances(false))
       {
